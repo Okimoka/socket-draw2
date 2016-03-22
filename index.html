@@ -1,0 +1,53 @@
+<html>
+<head>
+<script src="/socket.io/socket.io.js"></script>
+
+</head>
+<body>
+<canvas id="cvs" width="1000" height="1000" style="border:1px solid #c3c3c3;">
+<script>
+var mouseDown = 0;
+document.body.onmousedown = function(e) {initial=1;mouseDown=1}
+document.body.onmouseup = function() {mouseDown=0}
+var canvas = document.getElementById("cvs");
+var ctx = canvas.getContext("2d");
+ctx.fillStyle = "#FF0000";
+
+document.onmousemove = getMousePos;
+
+
+xy = [0,0,0,0];
+var socket = io();
+
+function getMousePos(e) {
+  if(mouseDown) {
+
+if(initial == 0) {
+    xy[2] = xy[0]
+    xy[3] = xy[1]
+} else {
+    xy[2] = e.pageX
+    xy[3] = e.pageY
+}
+
+
+    xy[0] = e.pageX
+    xy[1] = e.pageY
+
+initial = 0;
+
+    socket.emit('xy', xy);
+  }
+}
+
+socket.on('pos', function(msg, old){
+    ctx.beginPath();
+    ctx.moveTo(msg[2],msg[3]);
+    ctx.lineTo(msg[0],msg[1]);
+    ctx.stroke();
+});
+
+
+</script>
+</body>
+</html>
