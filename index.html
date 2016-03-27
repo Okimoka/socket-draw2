@@ -1,53 +1,230 @@
-<html>
+<!DOCTYPE html>
+
 <head>
-<script src="/socket.io/socket.io.js"></script>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width">
+  <title>Spiele</title>
+  <script src="https://cdn.socket.io/socket.io-1.4.5.js"></script>
 
+  <style>
+svg {
+  height: 1000px;
+  width: 1000px;
+}
+  </style>
 </head>
-<body>
-<canvas id="cvs" width="1000" height="1000" style="border:1px solid #c3c3c3;">
+<body onload="spininit()">
+
+
 <script>
-var mouseDown = 0;
-document.body.onmousedown = function(e) {initial=1;mouseDown=1}
-document.body.onmouseup = function() {mouseDown=0}
-var canvas = document.getElementById("cvs");
-var ctx = canvas.getContext("2d");
-ctx.fillStyle = "#FF0000";
 
-document.onmousemove = getMousePos;
+    var socket = io();
+
+    games = ["TF2", "Terraria", "Minecraft", "CSGO"];
+    document.write("<div style='line-height:30px'>");
+    for (var i = 0; i < games.length; i++) {
+        document.write("<span style='position:absolute'>"+games[i]+"</span><span style='position:absolute;left:150px'><input type='range' name="+games[i]+" oninput='refreshProb(this)'>&nbsp;&nbsp;<span id="+games[i]+">50%</span></span><br>")
+    };
+    document.write("</div>");
+    document.write("<button onclick='spininit()'>Anpassen</button>");
+    document.write("<br>");
+    document.write("<button onclick='actuallySpin()'>Drehen</button>")
+</script>
+
+    
+    <script type="text/javascript">
+        function polarToCartesian(centerX, centerY, radius, angleInDegrees) {
+  var angleInRadians = (angleInDegrees-90) * Math.PI / 180.0;
+
+  return {
+    x: centerX + (radius * Math.cos(angleInRadians)),
+    y: centerY + (radius * Math.sin(angleInRadians))
+  };
+}
+
+function describeArc(x, y, radius, startAngle, endAngle){
+
+    var start = polarToCartesian(x, y, radius, endAngle);
+    var end = polarToCartesian(x, y, radius, startAngle);
+
+    var arcSweep = endAngle - startAngle <= 180 ? "0" : "1";
+
+    var d = [
+        "M", start.x, start.y, 
+        "A", radius, radius, 0, arcSweep, 0, end.x, end.y,
+        "L", x,y,
+        "L", start.x, start.y
+    ].join(" ");
+
+    return d;       
+}
+
+values = new Uint32Array(games.length);
 
 
-xy = [0,0,0,0];
-var socket = io();
+document.write("<svg>")
+for (var i = 0; i < values.length; i++) {
+    document.write('<path id="arc'+i+'" fill="#'+Math.random().toString(16).slice(2, 8)+'" stroke="#'+Math.random().toString(16).slice(2, 8)+'" stroke-width="0" transform="rotate(0,0,0)" />')
+};
+document.write("</svg>")
 
-function getMousePos(e) {
-  if(mouseDown) {
 
-if(initial == 0) {
-    xy[2] = xy[0]
-    xy[3] = xy[1]
-} else {
-    xy[2] = e.pageX
-    xy[3] = e.pageY
+
+transform = "";
+
+function rotate(degree) {
+    for (var i = 0; i < values.length; i++) {
+        transform = parseFloat(document.getElementById("arc"+i).getAttribute("transform").slice(7,document.getElementById("arc"+i).getAttribute("transform").indexOf(' ')));
+        if(transform>360){document.getElementById("arc"+i).setAttribute("transform", 'rotate('+(transform-360)+',400,400)')} 
+        document.getElementById("arc"+i).setAttribute("transform", 'rotate('+(transform+degree)+' 400 400)');
+    };
+}
+
+count = 0;
+answer= 0;
+
+function spin(strength) {
+    result = 0;
+    count = strength;
+    answer = strength;
+
+    while(answer>0) {
+        result+=parseFloat(answer.toFixed(2));
+        //console.log(result)
+        answer-=0.01
+    }
+
+    interv = setInterval(function(){turn()}, 20);
+    //rotate(result)
+}
+
+sum=0
+
+function turn() {
+
+    if(count > 0) {
+        rotate(parseFloat(count.toFixed(2)));
+        sum+=parseFloat(count.toFixed(2))
+        console.log(sum.toFixed(2))
+        count-=0.01
+    } else {
+        clearInterval(interv)}
+    };
+
+
+/*
+270°  --> translate(0, 400)
+225°  --> translate(200, 483)
+180°  --> translate(400, 400)
+135°  --> translate(483, 200)
+112.5 --> translate(461, 92)
+90°   --> translate(400, 0)
+45°   --> translate(200, -83)
+22.5° --> translate(92, -61)
+0°    --> translate(0, 0)
+*/
+    </script>
+
+
+<script>
+
+
+
+    function refreshProb(that) {
+        console.log("ey!")
+        old = that.value - parseInt(document.getElementById(that.name).innerHTML);
+        diff = [that.value, old];
+        socket.emit(that.name, diff);
+
+probability = [];
+for (var i = 0; i < games.length; i++) {
+    probability.push(parseInt(document.getElementById(games[i]).innerHTML))
+};
+
+        //refreshChart(probability);
+        socket.emit("freshCharts", probability)
+    }
+
+
+for (var i = 0; i < games.length; i++) {
+    eval('socket.on("'+games[i]+'", function(vc){document.getElementById("'+games[i]+'").innerHTML = vc[0] + "%";document.getElementById("'+games[i]+'").parentElement.children[0].stepUp(vc[1])});');
+};
+
+socket.on("adaptVs", function(vs){
+    for (var i = 0; i < games.length; i++) {
+        document.getElementById(games[i]).parentElement.children[0].stepUp(vs[i] - parseInt(document.getElementById(games[i]).innerHTML));
+        document.getElementById(games[i]).innerHTML = vs[i] + "%";
+    };
+
+
+
+})
+
+function addToHundred(nums) {
+    sum = 0;
+    for (var i=nums.length; i--;) {
+         sum+=nums[i];
+    }
+    distance = 100 - sum
+    if(distance>=0) {
+        for (var i = 0; i < nums.length; i++) {
+            nums[i]+=Math.floor(distance/nums.length)
+        };
+    } else {
+        for (var i = 0; i < nums.length; i++) {
+            nums[i]+=Math.ceil(distance/nums.length)
+        };
+    }
+
+    nums[Math.floor(Math.random()*nums.length)]+=((distance%nums.length))
+    return nums;
+}
+props = []
+
+function spininit() {
+    props = [];
+    for (var i = 0; i < games.length; i++) {
+        props.push(parseInt(document.getElementById(games[i]).innerHTML))
+    };
+    props = addToHundred(props);
+    //refreshChart(props);
+    socket.emit("freshCharts", props)
+    socket.emit("spun", props);
 }
 
 
-    xy[0] = e.pageX
-    xy[1] = e.pageY
-
-initial = 0;
-
-    socket.emit('xy', xy);
-  }
+function actuallySpin() {
+    //console.log(props)
+    strength = 10;
+    //for (var i = 0; i < games.length; i++) {
+    //    games[i]
+    //};
+    socket.emit("realthing", strength)
 }
 
-socket.on('pos', function(msg, old){
-    ctx.beginPath();
-    ctx.moveTo(msg[2],msg[3]);
-    ctx.lineTo(msg[0],msg[1]);
-    ctx.stroke();
-});
+socket.on("actuallySpun", function(stronk) {
+    spin(stronk);
+})
+
+
+socket.on("freshdumbles", function(values){
+
+for (var i = 0; i < values.length; i++) {
+    begin=0;
+    for (var j = 0; j < i; j++) {
+        begin+=values[j]
+    };
+    //console.log(begin)
+    end=begin+values[i+1]
+
+    document.getElementById("arc"+i).setAttribute("d", describeArc(400, 400, 150, begin*3.6, (begin*3.6)+3.6*values[i]));
+};
+})
+
 
 
 </script>
+
+
 </body>
 </html>
